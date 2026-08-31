@@ -1,0 +1,165 @@
+#
+# veb.subr - helpers for the if_veb(4) ATF tests.
+#
+# Standalone equivalent of src's tests/sys/common/vnet.subr, so the test
+# suite can live in the veb repo without depending on the FreeBSD src
+# tree layout.  Interface and jail bookkeeping follows the same pattern:
+# names are appended to list files in the test's work directory and torn
+# down in veb_cleanup().
+#
+
+# Path to the vebctl harness.  Resolution order:
+#   1. $VEBCTL from the environment
+#   2. ../vebctl/vebctl relative to the test source dir (repo layout)
+#   3. vebctl in $PATH
+veb_find_vebctl()
+{
+	local c
+
+	if [ -n "${VEBCTL:-}" ]; then
+		return 0
+	fi
+	for c in "$(atf_get_srcdir)/../obj/vebctl" \
+	    "$(atf_get_srcdir)/../vebctl/vebctl" \
+	    "$(atf_get_srcdir)/vebctl"; do
+		if [ -x "${c}" ]; then
+			VEBCTL="${c}"
+			return 0
+		fi
+	done
+	if which -s vebctl; then
+		VEBCTL=vebctl
+		return 0
+	fi
+	atf_skip "vebctl not found; set VEBCTL or build vebctl/"
+}
+
+veb_init()
+{
+	veb_find_vebctl
+
+	if ! kldstat -q -m if_veb; then
+		kldload -n if_veb || atf_skip "if_veb.ko is not loaded" \
+		    " and could not be loaded"
+	fi
+}
+
+# Required by any test that runs traffic through vnet jails.
+vnet_init()
+{
+	if [ "$(sysctl -in kern.features.vimage)" != 1 ]; then
+		atf_skip "This test requires VIMAGE"
+	fi
+}
+
+veb_bridge_init()
+{
+	if ! kldstat -q -m if_bridge; then
+		kldload -n if_bridge || atf_skip "if_bridge.ko not available"
+	fi
+}
+
+# Create an epair; echoes the base name (e.g. "epair0").
+veb_mkepair()
+{
+	local ifname
+
+	ifname=$(ifconfig epair create)
+	echo ${ifname%a} >> created_interfaces.lst
+	echo ${ifname%a}
+}
+
+# Create a veb; echoes its name.
+veb_mkveb()
+{
+	local ifname
+
+	ifname=$(ifconfig veb create)
+	# Track vebs separately: they must be destroyed before their
+	# members (in particular before any vport, see veb_cleanup()).
+	echo ${ifname} >> created_vebs.lst
+	echo ${ifname}
+}
+
+# Create a vport; echoes its name.
+veb_mkvport()
+{
+	local ifname
+
+	ifname=$(ifconfig vport create)
+	echo ${ifname} >> created_vports.lst
+	echo ${ifname}
+}
+
+veb_mkbridge()
+{
+	local ifname
+
+	ifname=$(ifconfig bridge create)
+	# Destroyed in the veb pass; a bridge holding members must also
+	# go before those members do.
+	echo ${ifname} >> created_vebs.lst
+	echo ${ifname}
+}
+
+# veb_mkjail <name> [iface ...] - create a persistent vnet jail and move
+# the given interfaces into it.
+veb_mkjail()
+{
+	local jailname vnet_interfaces ifname
+
+	jailname=$1
+	shift
+
+	vnet_interfaces=""
+	for ifname in "$@"; do
+		vnet_interfaces="${vnet_interfaces} vnet.interface=${ifname}"
+	done
+	jail -c name=${jailname} persist vnet ${vnet_interfaces}
+
+	echo ${jailname} >> created_jails.lst
+}
+
+# Tear everything down, in dependency order:
+#   jails first (interfaces inside them return to the host vnet),
+#   then vebs/bridges (releases their members, including vports),
+#   then vports and everything else.
+#
+# NOTE: vports are destroyed only after every veb is gone.  Destroying a
+# vport that is still a veb member trips the KASSERT in
+# vport_clone_destroy() on an INVARIANTS kernel.
+veb_cleanup()
+{
+	local jailname ifname
+
+	if [ -f created_jails.lst ]; then
+		while read jailname; do
+			jail -r ${jailname}
+		done < created_jails.lst
+		rm created_jails.lst
+	fi
+
+	# Tolerate interfaces a test body already destroyed by hand
+	# (e.g. vport_constraints destroys a tracked vport itself).
+	if [ -f created_vebs.lst ]; then
+		while read ifname; do
+			ifconfig ${ifname} destroy 2>/dev/null || true
+		done < created_vebs.lst
+		rm created_vebs.lst
+	fi
+
+	if [ -f created_vports.lst ]; then
+		while read ifname; do
+			ifconfig ${ifname} destroy 2>/dev/null || true
+		done < created_vports.lst
+		rm created_vports.lst
+	fi
+
+	if [ -f created_interfaces.lst ]; then
+		while read ifname; do
+			ifconfig ${ifname}a destroy 2>/dev/null || \
+			    ifconfig ${ifname} destroy 2>/dev/null || true
+		done < created_interfaces.lst
+		rm created_interfaces.lst
+	fi
+}
