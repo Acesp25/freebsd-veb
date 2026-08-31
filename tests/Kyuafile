@@ -1,0 +1,9 @@
+syntax(2)
+
+test_suite('veb')
+
+atf_test_program{
+    name = 'veb_test.sh',
+    required_user = 'root',
+    timeout = 300,
+}
