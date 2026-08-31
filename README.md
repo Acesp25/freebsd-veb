@@ -31,3 +31,9 @@ ifconfig vport create
  ./obj/vebctl veb0 timeout         # print veb0 cache timeout (VEBGTO)
  ./obj/vebctl veb0 timeout 240     # set veb0 cache timeout (VEBSTO)
 ```
+
+## Testing
+To run the tests provided in the repo:
+1. Load the driver (if not already loaded)
+2. cd into tests/
+3. Do ```kyua test``` to run the full test suite
