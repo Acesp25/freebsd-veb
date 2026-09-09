@@ -109,7 +109,7 @@
 #define	VEB_IFCAPS_STRIP	IFCAP_LRO
 
 static const char veb_name[] = "veb";
-static MALLOC_DEFINE(M_VEB, "veb", "Virtual Ethernet Bridge psudeo driver");
+static MALLOC_DEFINE(M_VEB, "veb", "Virtual Ethernet Bridge pseudo driver");
 
 VNET_DEFINE_STATIC(struct if_clone *, veb_cloner);
 #define V_veb_cloner	VNET(veb_cloner)
