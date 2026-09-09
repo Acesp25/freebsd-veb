@@ -264,6 +264,7 @@ static void	veb_set_ifcap(struct veb_softc *, struct veb_port *, int);
 static int	veb_ioctl(struct ifnet *, u_long, caddr_t);
 static void	veb_delete_member(struct veb_softc *, struct veb_port *, int);
 static struct mbuf *veb_input(struct ifnet *, struct mbuf *);
+static int	veb_output(struct ifnet *, struct mbuf *, struct sockaddr *, struct rtentry *);
 static void	veb_forward(struct veb_softc *, struct veb_port *, struct mbuf *);
 static void	veb_linkstate(struct ifnet *);
 static void	veb_linkcheck(struct veb_softc *);
@@ -1081,6 +1082,7 @@ veb_delete_member(struct veb_softc *sc, struct veb_port *vp, int gone)
 	KASSERT(vp->vp_addrcnt == 0,
 	    ("%s: %d veb routes referenced", __func__, vp->vp_addrcnt));
 
+	ifs->if_bridge_output = NULL;
 	ifs->if_bridge_input = NULL;
 	ifs->if_bridge_linkstate = NULL;
 
@@ -1694,6 +1696,15 @@ veb_input(struct ifnet *ifp, struct mbuf *m) {
 	return (NULL);
 }
 
+/*
+ * We keep a blank veb_output method so if_bridge_output is non-NULL
+ */
+static int
+veb_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa, struct rtentry *rt) 
+{
+	return (EXTERROR(EINVAL, "Veb has no output path"));
+}
+
 static void
 veb_forward(struct veb_softc *sc, struct veb_port *svp, struct mbuf *m)
 {
@@ -2092,6 +2103,7 @@ veb_ioctl_add(struct veb_softc *sc, void *arg)
 	 * vport and vport_ioctl() enforces that itself.
 	 */
 	if (!IS_VPORT(vp)) {
+		ifs->if_bridge_output = veb_output;
 		ifs->if_bridge_input = veb_input;
 		ifs->if_bridge_linkstate = veb_linkstate;
 		ifs->if_bridge = vp;
