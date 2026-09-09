@@ -984,7 +984,7 @@ veb_p_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 static struct veb_port *
 veb_port_of(struct ifnet *member_ifp)
 {
-	if (strcmp(member_ifp->if_dname, vport_name) == 0) {
+	if (member_ifp->if_ioctl == vport_ioctl) {
 		struct vport_softc *vpsc = if_getsoftc(member_ifp);
 		return (vpsc->sc_vp);
 	}
