@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
 */
 
+/* we may need to change this in the future */
 #define EXTERR_CATEGORY EXTERR_CAT_BRIDGE
 
 #include <sys/param.h>
@@ -323,7 +324,7 @@ static int	veb_altq_transmit(if_t, struct mbuf *);
 
 static eventhandler_tag veb_detach_cookie;
 
-SYSCTL_DECL(_net_link); // OID_AUTO to not conflict with bridge
+SYSCTL_DECL(_net_link); /* OID_AUTO to not conflict with bridge */
 static SYSCTL_NODE(_net_link, OID_AUTO, veb, CTLFLAG_RW | CTLFLAG_MPSAFE, 0, "veb" );
 
 /* share MAC with first veb member */
@@ -974,10 +975,7 @@ veb_p_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 }
 
 /*
- * Resolve an ifnet to its veb_port. Members are found through
- * if_bridge; a vport does not set that field, so it resolves through its
- * own softc.  if_initname() stores the caller's pointer, so if_dname is
- * literally vport_name for every vport.
+ * Resolve an ifnet to its veb_port via if_bridge void pointer
  *
  * Caller must be in NET_EPOCH or hold VEB_LOCK.
  */
