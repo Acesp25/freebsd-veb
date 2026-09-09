@@ -259,6 +259,7 @@ static int	veb_transmit(struct ifnet *, struct mbuf *);
 static void	veb_qflush(struct ifnet *);
 static void	veb_timer(void *);
 static void	veb_mutecaps(struct veb_softc *);
+static void	veb_reassign(struct ifnet *, struct vnet *, char *);
 static void	veb_set_ifcap(struct veb_softc *, struct veb_port *, int);
 static int	veb_ioctl(struct ifnet *, u_long, caddr_t);
 static void	veb_delete_member(struct veb_softc *, struct veb_port *, int);
@@ -720,6 +721,9 @@ veb_clone_create(struct if_clone *ifc, char *name, size_t len, struct ifc_data *
 	ether_gen_addr(ifp, &sc->sc_defaddr);
 	ether_ifattach(ifp, sc->sc_defaddr.octet);
 	ifp->if_baudrate = 0; /* Cleanup from ether_ifattach */
+#ifdef VIMAGE
+	ifp->if_reassign = veb_reassign;
+#endif
 
 	*ifpp = ifp;
 
@@ -973,6 +977,22 @@ veb_p_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 
 	return ((*vp->vp_ioctl)(ifp, cmd, data));
 }
+
+#ifdef VIMAGE
+static void
+veb_reassign(struct ifnet *ifp, struct vnet *newvnet, char *arg)
+{
+	struct veb_softc *sc = ifp->if_softc;
+	struct veb_port *vp;
+
+	VEB_LOCK(sc);
+
+	while ((vp = CK_LIST_FIRST(&sc->sc_vebport)) != NULL)
+		veb_delete_member(sc, vp, 0);
+
+	VEB_UNLOCK(sc);
+}
+#endif
 
 /*
  * Resolve an ifnet to its veb_port via if_bridge void pointer
