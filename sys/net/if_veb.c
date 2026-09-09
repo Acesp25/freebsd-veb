@@ -988,6 +988,11 @@ veb_port_of(struct ifnet *member_ifp)
 		struct vport_softc *vpsc = if_getsoftc(member_ifp);
 		return (vpsc->sc_vp);
 	}
+
+	/* We need to ensure that the ifp is one we installed ourselves */
+	if (member_ifp->if_bridge_input != veb_input)
+		return (NULL);
+
 	return (member_ifp->if_bridge);
 }
 
