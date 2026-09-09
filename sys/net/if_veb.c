@@ -343,7 +343,7 @@ SYSCTL_BOOL(_net_link_veb, OID_AUTO, log_mac_flap,
 VNET_DEFINE_STATIC(int, rtable_prune_period) = VEB_RTABLE_PRUNE_PERIOD;
 #define V_rtable_prune_period VNET(rtable_prune_period)
 SYSCTL_INT(_net_link_veb, OID_AUTO, veb_rtable_prune_period,
-    CTLFLAG_RW | CTLFLAG_VNET, &VNET_NAME(rtable_prune_period), true,
+    CTLFLAG_RW | CTLFLAG_VNET, &VNET_NAME(rtable_prune_period), VEB_RTABLE_PRUNE_PERIOD,
     "Number of seconds between walks on the route list");
 
 VNET_DEFINE_STATIC(uma_zone_t, veb_rtnode_zone);
