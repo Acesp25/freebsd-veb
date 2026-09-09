@@ -262,7 +262,6 @@ static void	veb_set_ifcap(struct veb_softc *, struct veb_port *, int);
 static int	veb_ioctl(struct ifnet *, u_long, caddr_t);
 static void	veb_delete_member(struct veb_softc *, struct veb_port *, int);
 static struct mbuf *veb_input(struct ifnet *, struct mbuf *);
-static int	veb_output(struct ifnet *, struct mbuf *, struct sockaddr *, struct rtentry *);
 static void	veb_forward(struct veb_softc *, struct veb_port *, struct mbuf *);
 static void	veb_linkstate(struct ifnet *);
 static void	veb_linkcheck(struct veb_softc *);
@@ -1064,7 +1063,6 @@ veb_delete_member(struct veb_softc *sc, struct veb_port *vp, int gone)
 	KASSERT(vp->vp_addrcnt == 0,
 	    ("%s: %d veb routes referenced", __func__, vp->vp_addrcnt));
 
-	ifs->if_bridge_output = NULL;
 	ifs->if_bridge_input = NULL;
 	ifs->if_bridge_linkstate = NULL;
 
@@ -1678,70 +1676,6 @@ veb_input(struct ifnet *ifp, struct mbuf *m) {
 	return (NULL);
 }
 
-static int
-veb_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa, struct rtentry *rt) {
-	struct ether_header *eh;
-	struct veb_port *svp;
-	struct ifnet *vpp, *dst_if;
-	struct veb_softc *sc;
-	ether_vlanid_t vlan;
-
-	NET_EPOCH_ASSERT();
-
-	if (m->m_len < ETHER_HDR_LEN) {
-		m = m_pullup(m, ETHER_HDR_LEN);
-		if (m == NULL)
-			return (0);
-	}
-
-	svp = ifp->if_bridge;
-	if (__predict_false(svp == NULL)) {
-		m_freem(m);
-		return (0);
-	}
-	sc = svp->vp_sc;
-	vpp = sc->sc_ifp;
-
-	eh = mtod(m, struct ether_header *);
-	vlan = VLANTAGOF(m);
-
-	/*
-	 * If veb is down, but the original output interface is up,
-	 * go ahead and send out that interface.  Otherwise, the packet
-	 * is dropped below.
-	 */
-	if ((vpp->if_drv_flags & IFF_DRV_RUNNING) == 0) {
-		dst_if = ifp;
-		goto sendunicast;
-	}
-
-	/*
-	 * If the packet is a multicast, or we don't know a better way to
-	 * get there, send to all interfaces.
-	 */
-	if (ETHER_IS_MULTICAST(eh->ether_dhost))
-		dst_if = NULL;
-	else
-		dst_if = veb_rtlookup(sc, eh->ether_dhost, vlan);
-
-	/* tap, then broadcast if dst is unknown */
-	if (dst_if != ifp)
-		ETHER_BPF_MTAP(vpp, m);
-	if (dst_if == NULL) {
-		veb_broadcast(sc, svp, NULL, m);
-		return (0);
-	}
-
-sendunicast:
-	if ((dst_if->if_drv_flags & IFF_DRV_RUNNING) == 0) {
-		m_freem(m);
-		return (0);
-	}
-
-	veb_enqueue(sc, dst_if, m, NULL);
-	return (0);
-}
-
 static void
 veb_forward(struct veb_softc *sc, struct veb_port *svp, struct mbuf *m)
 {
@@ -2135,13 +2069,11 @@ veb_ioctl_add(struct veb_softc *sc, void *arg)
 	 *
 	 * vport's is deliberately excluded. It needs ordinary host semantics
 	 * (addressing, SIOCSIFFLAGS, lladdr changes) that veb_p_ioctl() denies
-	 * to members, and its ingress is vport_transmit() rather than
-	 * veb_output(). One consequence: ifhwioctl()'s "no MTU changes on
+	 * to members. One consequence: ifhwioctl()'s "no MTU changes on
 	 * bridge members" guard keys off if_bridge, so it does not cover the
 	 * vport and vport_ioctl() enforces that itself.
 	 */
 	if (!IS_VPORT(vp)) {
-		ifs->if_bridge_output = veb_output;
 		ifs->if_bridge_input = veb_input;
 		ifs->if_bridge_linkstate = veb_linkstate;
 		ifs->if_bridge = vp;
