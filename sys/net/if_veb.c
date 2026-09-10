@@ -342,10 +342,10 @@ SYSCTL_BOOL(_net_link_veb, OID_AUTO, log_mac_flap,
     CTLFLAG_RW | CTLFLAG_VNET, &VNET_NAME(log_mac_flap), true,
     "Log MAC address port flapping");
 
-VNET_DEFINE_STATIC(int, rtable_prune_period) = VEB_RTABLE_PRUNE_PERIOD;
-#define V_rtable_prune_period VNET(rtable_prune_period)
-SYSCTL_INT(_net_link_veb, OID_AUTO, veb_rtable_prune_period,
-    CTLFLAG_RW | CTLFLAG_VNET, &VNET_NAME(rtable_prune_period), VEB_RTABLE_PRUNE_PERIOD,
+VNET_DEFINE_STATIC(int, veb_rtable_prune_period) = VEB_RTABLE_PRUNE_PERIOD;
+#define V_veb_rtable_prune_period VNET(veb_rtable_prune_period)
+SYSCTL_INT(_net_link_veb, OID_AUTO, rtable_prune_period,
+    CTLFLAG_RW | CTLFLAG_VNET, &VNET_NAME(veb_rtable_prune_period), VEB_RTABLE_PRUNE_PERIOD,
     "Number of seconds between walks on the route list");
 
 VNET_DEFINE_STATIC(uma_zone_t, veb_rtnode_zone);
@@ -1188,7 +1188,7 @@ veb_init(void *xsc)
 
 	VEB_LOCK(sc);
 
-	callout_reset(&sc->sc_vebcallout, V_rtable_prune_period * hz,
+	callout_reset(&sc->sc_vebcallout, V_veb_rtable_prune_period * hz,
 	    veb_timer, sc);
 
 	ifp->if_drv_flags |= IFF_DRV_RUNNING;
@@ -1285,7 +1285,7 @@ veb_timer(void *arg)
 
 	if (sc->sc_ifp->if_drv_flags & IFF_DRV_RUNNING)
 		callout_reset(&sc->sc_vebcallout,
-		    V_rtable_prune_period * hz, veb_timer, sc);
+		    V_veb_rtable_prune_period * hz, veb_timer, sc);
 	CURVNET_RESTORE();
 }
 

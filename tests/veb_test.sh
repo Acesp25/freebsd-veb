@@ -607,8 +607,8 @@ learning_expire_body()
 	# Must happen before the veb is brought up: veb_init() arms the
 	# callout with the value current at that moment.  Saved to a file
 	# so the cleanup routine can restore it.
-	sysctl -n net.link.veb.veb_rtable_prune_period > prune_period.old
-	sysctl net.link.veb.veb_rtable_prune_period=2
+	sysctl -n net.link.veb.rtable_prune_period > prune_period.old
+	sysctl net.link.veb.rtable_prune_period=2
 
 	ep_one=$(veb_mkepair)
 	ep_two=$(veb_mkepair)
@@ -652,7 +652,7 @@ learning_expire_cleanup()
 {
 	if [ -f prune_period.old ]; then
 		sysctl \
-		    net.link.veb.veb_rtable_prune_period=$(cat prune_period.old)
+		    net.link.veb.rtable_prune_period=$(cat prune_period.old)
 		rm prune_period.old
 	fi
 	veb_cleanup
