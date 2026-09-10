@@ -7,22 +7,22 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 
 ## Index
 **Host presence**
-- [D1](#d1-no-implicit-host-presence) — No implicit host presence
-- [D2](#d2-explicit-l2-host-presence-via-vport-a-first-class-cloner) — Explicit L2 host presence via `vport`, a first-class cloner
-- [D3](#d3-if_bridge-reused-as-the-member-backpointer-vport-excluded) — `if_bridge` reused as the member backpointer; vport excluded
+- [D1](#d1-no-implicit-host-presence) - No implicit host presence
+- [D2](#d2-explicit-l2-host-presence-via-vport-a-first-class-cloner) - Explicit host presence via `vport`, a first-class cloner
+- [D3](#d3-if_bridge-reused-as-the-member-backpointer-vport-excluded) - `if_bridge` reused as the member backpointer; vport excluded
 
 **Membership**
-- [D4](#d4-members-may-not-carry-ip-addresses) — Members may not carry IP addresses
-- [D5](#d5-one-vport-per-veb-ifveb_hasvport) — One vport per veb (`IFVEB_HASVPORT`)
+- [D4](#d4-members-may-not-carry-ip-addresses) - Members may not carry IP addresses
+- [D5](#d5-one-vport-per-veb-ifveb_hasvport) - One vport per veb (`IFVEB_HASVPORT`)
 
 **Control plane and ABI**
-- [D6](#d6-direction-based-default-deny-on-member-ioctls) — Direction-based default-deny on member ioctls
-- [D7](#d7-private-minimal-abi) — Private minimal ABI
+- [D6](#d6-direction-based-default-deny-on-member-ioctls) - Direction-based default-deny on member ioctls
+- [D7](#d7-private-minimal-abi) - Private minimal ABI
 
 **Non-goals**
-- [D8](#d8-no-stp) — No STP
-- [D9](#d9-no-pfil) — No pfil
-- [D10](#d10-no-span-ports) — No span ports
+- [D8](#d8-no-stp) - No STP
+- [D9](#d9-no-pfil) - No pfil
+- [D10](#d10-no-span-ports) - No span ports
 ---
 
 ## Host presence
@@ -33,7 +33,7 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 - **Cost:** no host access until a vport exists, which differs from `if_bridge` behaviour.
 - **Tested:** `no_host_presence`, with `transmit_ipv4_unicast` as the positive control.
 
-### D2: Explicit L2 host presence via `vport`, a first-class cloner
+### D2: Explicit host presence via `vport`, a first-class cloner
 - Host presence is its own cloned interface rather than a property of the veb ifnet.
 - **Why:** a vport has its own flags, counters, MTU and addresses, can move into a vnet jail, and can be absent entirely. None of that is available if the host is on the segment by default.
 - `vport_transmit()` routes through `veb_forward()` rather than shortcutting to the members, so the host MAC is learned like any other source and the learning table needs no special case.
@@ -42,10 +42,10 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 
 ### D3: `if_bridge` reused as the member backpointer; vport excluded
 - Members keep their `struct veb_port` backpointer in `ifp->if_bridge`. The vport does not; its association lives in `vport_softc->sc_vp`, and `veb_port_of()` resolves a vport by comparing its ioctl function pointer.
-- **Why:** `ether_output()` and `ether_input()` dispatch on `if_bridge` first (the `BRIDGE_INPUT()` site in `if_ethersubr.c`). Setting it on a vport would either bypass `if_transmit()` or loop frames back into forwarding.
-- **Cost 1:** the field has no owner tag. `bridge_ifdetach()` and `veb_ifdetach()` both run on the global `ifnet_departure_event` and both cast `ifp->if_bridge` to their own type; `struct bridge_iflist` and `struct veb_port` share their first three fields, so the softc pointer reads back as valid and gets locked. Destroying an interface that is still a veb member, with `if_bridge.ko` loaded, panics in `_sx_xlock()` from `bridge_ifdetach()`. Both handlers must gate on `if_bridge_input` before trusting the field; the `if_bridge` side is a separate commit in the series.
+- **Why:** `ether_output()` and `ether_input_internal()` dispatch on `if_bridge` first (the `BRIDGE_INPUT()` site in `if_ethersubr.c`). Setting it on a vport would either bypass `if_transmit()` or loop frames back into forwarding.
+- **Cost 1:** the field has no owner tag. `bridge_ifdetach()` and `veb_ifdetach()` both run on the global `ifnet_departure_event` and both cast `ifp->if_bridge` to their own type; `struct bridge_iflist` and `struct veb_port` share their first three fields, so the softc pointer reads back as valid and gets locked. Destroying an interface that is still a veb member, with `if_bridge.ko` loaded before `if_veb.ko`, panics in `_sx_xlock()` from `bridge_ifdetach()`. Both handlers must gate on `if_bridge_input` before trusting the field; the `if_bridge` side is a separate commit in the series.
 - **Cost 2:** `ifhwioctl()`'s "no MTU changes on bridge members" guard keys off `if_bridge`, so it misses the vport and `vport_ioctl()` enforces that itself.
-- **Tested:** `bridge_mutual_exclusion` (join-side exclusion), `delete_with_members` (field cleared on teardown), `member_departure` (regression for the panic, but only with `if_bridge.ko` loaded).
+- **Tested:** `bridge_mutual_exclusion` (join-side exclusion), `delete_with_members` (field cleared on teardown), `member_departure` (regression for the panic, but only with `if_bridge.ko` loaded before `if_veb.ko`).
 
 ## Membership
 ### D4: Members may not carry IP addresses
@@ -71,7 +71,7 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 ### D7: Private minimal ABI
 - `VEBADD` / `VEBDEL` / `VEBGIFS` and `struct ifvreq`, not the `BRDG*` surface. Eight subcommands against bridge's thirty-nine, dispatched through `veb_control_table[]` with per-entry argument size, direction and privilege flags.
 - **Why:** an ABI is a promise. Promising `BRDGSPRI` in a driver with no STP is worse than not offering it.
-- Port flags are set and cleared by mask, `vp->vp_flags = (vp->vp_flags & ~clrmask) | setmask`, applied to the port's flags rather than the userland-supplied value, with both masks validated against `IFVPUMASK` and a flag in both rejected. `if_bridge`'s read-modify-write on the supplied value races two concurrent flag changes against each other; deltas mean two callers changing different flags cannot clobber one another.
+- Port flags are set and cleared by mask, `vp->vp_flags = (vp->vp_flags & ~clrmask) | setmask`, and are applied to the port's flags rather than the userland-supplied value, with both masks validated against `IFVPUMASK` and a flag in both rejected. `if_bridge`'s read-modify-write on the supplied value races two concurrent flag changes against each other; deltas mean two callers changing different flags cannot clobber one another.
 - `VEBGIFS` keeps `BRDGGIFS`'s two-pass copyout protocol; deviating would buy nothing.
 - **Cost:** `ifconfig` needs its own `ifveb.c`, with distinct subcommand names to avoid the flat global `cmd_register` collision.
 - **Tested:** `ioctl_validation`, `unprivileged`, `flags_roundtrip`. `vport_flag_rejected` skips without a `rawflags` verb in `vebctl`; do not count it until it runs.
