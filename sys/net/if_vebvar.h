@@ -14,10 +14,10 @@
 
 #define VEBADD		0
 #define VEBDEL		1
-#define VEBGIFS		2	/* get member list (ifvconf) */
+#define VEBGIFS		2	/* get member list (ifvpconf) */
 #define VEBGRTS		3	/* get address list (ifvaconf) */
-#define	VEBGIFFLGS	4	/* get member if flags (ifvebreq) */
-#define	VEBSIFFLGS	5	/* set member if flags (ifvebreq) */
+#define	VEBGIFFLGS	4	/* get member if flags (ifvreq) */
+#define	VEBSIFFLGS	5	/* set member if flags (ifvreq) */
 #define	VEBGTO		6	/* get cache timeout (ifvrparam) */
 #define	VEBSTO		7	/* set cache timeout (ifvrparam) */
 

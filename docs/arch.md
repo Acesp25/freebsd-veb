@@ -63,7 +63,7 @@ Members lose their ioctl to `veb_p_ioctl()` (section 5). A vport keeps `vport_io
 
 ### 3.4 Other vport asymmetries
 - A veb accepts at most one vport (`IFVEB_HASVPORT`).
-- Vports do not contribute to link state as there is no physical link to report. A vport-only veb therefore reports down.
+- Vports do not contribute to link state as there is no physical link to report. A vport-only veb therefore reports up.
 - `vport_clone_destroy()` asserts `sc_vp == NULL`. `veb_ifdetach()` on `ifnet_departure_event` is what makes that hold.
 - `vnet_veb_uninit()` detaches the veb cloner before the vport cloner: detaching a cloner destroys its instances, and `veb_delete_member()` must run while the vport ifnets and softcs are still alive.
 
@@ -77,7 +77,7 @@ Members lose their ioctl to `veb_p_ioctl()` (section 5). A vport keeps `vport_io
 Lock order is `VEB_LOCK -> VPORT_LOCK` and `VEB_LOCK -> VEB_RT_LOCK`; neither reverse is taken. `vport_ioctl()` must therefore never acquire `VEB_LOCK`.
 
 ## 5. Member isolation
-`if_bridge` leaves a member's `if_ioctl` alone and gates member configuration case by case, with `net.link.bridge.member_ifaddrs` as an opt-out. `veb` follows OpenBSD instead: `veb_ioctl_add()` saves `if_ioctl` in `vp_ioctl` and installs `veb_p_ioctl()`, which passes `SIOCSIFFLAGS` (used by `ifpromisc()`), `SIOCSIFMTU`, `SIOCADDMULTI` and `SIOCDELMULTI` through, refuses `SIOCSIFADDR`/`SIOCAIFADDR`/`SIOCSIFCAP` with `EBUSY`, and refuses any other `IOC_IN` command by default. So, a write-side ioctl added to the tree later is denied rather than silently allowed. Read-only commands fall through. A port already cleared by a concurrent delete returns `EOPNOTSUPP`.
+`if_bridge` leaves a member's `if_ioctl` alone and gates member configuration case by case, with `net.link.bridge.member_ifaddrs` as an opt-out. `veb` follows OpenBSD instead: `veb_ioctl_add()` saves `if_ioctl` in `vp_ioctl` and installs `veb_p_ioctl()`, which passes `SIOCSIFFLAGS` (used by `ifpromisc()`), `SIOCSIFMTU`, `SIOCADDMULTI` and `SIOCDELMULTI` through, refuses `SIOCSIFADDR`/`SIOCAIFADDR`/`SIOCSIFCAP` with `EBUSY`, and refuses any other write-only `IOC_IN` command by default. So, a write-side ioctl added to the tree later is denied rather than silently allowed. Read-only commands fall through. A port already cleared by a concurrent delete returns `EOPNOTSUPP`.
 
 Members may never hold an IP address: there is no `member_ifaddrs` equivalent, and the check at add time is unconditional. `veb_set_ifcap()` calls `vp_ioctl` directly, since `veb_p_ioctl()` would deny its own `SIOCSIFCAP`.
 

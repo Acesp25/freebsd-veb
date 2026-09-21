@@ -43,7 +43,7 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 ### D3: `if_bridge` reused as the member backpointer; vport excluded
 - Members keep their `struct veb_port` backpointer in `ifp->if_bridge`. The vport does not; its association lives in `vport_softc->sc_vp`, and `veb_port_of()` resolves a vport by comparing its ioctl function pointer.
 - **Why:** `ether_output()` and `ether_input_internal()` dispatch on `if_bridge` first (the `BRIDGE_INPUT()` site in `if_ethersubr.c`). Setting it on a vport would either bypass `if_transmit()` or loop frames back into forwarding.
-- **Cost 1:** the field has no owner tag. `bridge_ifdetach()` and `veb_ifdetach()` both run on the global `ifnet_departure_event` and both cast `ifp->if_bridge` to their own type; `struct bridge_iflist` and `struct veb_port` share their first three fields, so the softc pointer reads back as valid and gets locked. Destroying an interface that is still a veb member, with `if_bridge.ko` loaded before `if_veb.ko`, panics in `_sx_xlock()` from `bridge_ifdetach()`. Both handlers must gate on `if_bridge_input` before trusting the field; the `if_bridge` side is a separate commit in the series.
+- **Cost 1:** the field has no owner tag. `bridge_ifdetach()` and `veb_ifdetach()` both run on the global `ifnet_departure_event` and both cast `ifp->if_bridge` to their own type; `struct bridge_iflist` and `struct veb_port` share their first three fields, so the softc pointer reads back as valid and gets locked. Destroying an interface that is still a veb member, with `if_bridge.ko` loaded before `if_veb.ko`, panics in `_sx_xlock()` from `bridge_ifdetach()`. Both handlers must gate on `if_bridge_input` before trusting the field; the `if_bridge` side is a separate commit.
 - **Cost 2:** `ifhwioctl()`'s "no MTU changes on bridge members" guard keys off `if_bridge`, so it misses the vport and `vport_ioctl()` enforces that itself.
 - **Tested:** `bridge_mutual_exclusion` (join-side exclusion), `delete_with_members` (field cleared on teardown), `member_departure` (regression for the panic, but only with `if_bridge.ko` loaded before `if_veb.ko`).
 
@@ -63,8 +63,8 @@ Each entry gives the decision, why, what it costs, and how it is verified.
 
 ## Control plane and ABI
 ### D6: Direction-based default-deny on member ioctls
-- Members get their `if_ioctl` replaced with `veb_p_ioctl()`, which denies any command with `IOC_IN` set unless allowlisted. `SIOCSIFFLAGS`, `SIOCSIFMTU`, `SIOCADDMULTI` and `SIOCDELMULTI` are allowed; `SIOCSIFADDR`, `SIOCAIFADDR` and `SIOCSIFCAP` are denied by name. `if_bridge` has no member ioctl shim at all.
-- **Why:** it fails closed as the kernel gains new `SIOC*` commands. A denylist would silently permit anything added later. This picked up `SIOCAIFADDR_IN6` for free.
+- Members get their `if_ioctl` replaced with `veb_p_ioctl()`, which denies write-only ioctls (_IOW) unless allowlisted, and passes read-write and read-only commands through.
+- **Why:** it fails closed as the kernel gains new write-only ioctl commands. A denylist would silently permit anything added later.
 - **Cost:** `veb_set_ifcap()` bypasses the shim, commented at the call site. It is the only bypass.
 - **Tested:** not covered. `ioctl_validation` covers the `SIOCSDRVSPEC` dispatch table (D7), a different mechanism. `ifconfig <member> mtu 1400` or an address add against a member would cover this.
 

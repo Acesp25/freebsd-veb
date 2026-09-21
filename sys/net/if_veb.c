@@ -24,7 +24,6 @@
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
 #include <sys/syslog.h>
-#include <sys/systm.h>
 
 #include <net/bpf.h>
 #include <net/ethernet.h>
@@ -35,7 +34,6 @@
 #include <net/if_types.h>
 #include <net/if_media.h>
 #include <net/if_var.h>
-#include <net/if_vlan_var.h>
 #include <net/if_private.h>
 #include <net/if_vlan_var.h>
 #include <net/vnet.h>
@@ -164,7 +162,7 @@ VNET_DEFINE_STATIC(struct if_clone *, vport_cloner);
  * if_veb using the same locking mechanism as if_bridge.c,
  * That being a mtx for routing table operations (non-sleepable) and a sc lock (sleepable)
  * for all other operations.
-*/
+ */
 #define VEB_LOCK_INIT(_sc)	do {				\
 	sx_init(&(_sc)->sc_sx, "if_veb");			\
 	mtx_init(&(_sc)->sc_rt_mtx, "if_veb rt", NULL, MTX_DEF);\
@@ -210,9 +208,9 @@ VNET_DEFINE_STATIC(struct if_clone *, vport_cloner);
  * NET_EPOCH by vport_transmit() and veb_port_of(), which is what keeps the
  * veb_port alive across the read. vport_ioctl() reads it while holding
  * only VPORT_LOCK; that read is unsynchronised against the VEB_LOCK
- * writer, but it is used purely for policy decisions (may this MTU change
- * proceed, may this address be assigned) where losing a race just means
- * the caller sees the answer from a moment earlier.
+ * writer, but it is used purely for policy decisions (may this address be
+ * assigned) where losing a race just means the caller sees
+ * the answer from a moment earlier.
  */
 #define VPORT_LOCK_INIT(_sc)	do {				\
 	sx_init(&(_sc)->sc_sx, "if_vport");			\
@@ -245,7 +243,7 @@ static void	veb_linkstate(struct ifnet *);
 static void	veb_linkcheck(struct veb_softc *);
 static struct veb_port *veb_lookup_member(struct veb_softc *, const char *);
 static void	veb_ifdetach(void *, struct ifnet *);
-static void	veb_broadcast(struct veb_softc *, struct veb_port *, struct ifnet *,struct mbuf *);
+static void	veb_broadcast(struct veb_softc *, struct veb_port *, struct ifnet *, struct mbuf *);
 static struct veb_port *veb_lookup_member_if(struct veb_softc *, struct ifnet *);
 static struct veb_port *veb_port_of(struct ifnet *);
 static int	veb_enqueue(struct veb_softc *, struct ifnet *, struct mbuf *,
@@ -301,7 +299,7 @@ static int	veb_altq_transmit(if_t, struct mbuf *);
 static eventhandler_tag veb_detach_cookie;
 
 SYSCTL_DECL(_net_link); /* OID_AUTO to not conflict with bridge */
-static SYSCTL_NODE(_net_link, OID_AUTO, veb, CTLFLAG_RW | CTLFLAG_MPSAFE, 0, "veb" );
+static SYSCTL_NODE(_net_link, OID_AUTO, veb, CTLFLAG_RW | CTLFLAG_MPSAFE, 0, "veb");
 
 /* share MAC with first veb member */
 VNET_DEFINE_STATIC(int, veb_inherit_mac);
@@ -688,7 +686,7 @@ veb_clone_create(struct if_clone *ifc, char *name, size_t len, struct ifc_data *
 	ifp->if_qflush = veb_qflush;
 	ifp->if_init = veb_init;
 
-	/* 
+	/*
 	 * Having type IFT_BRIDGE is paramount to this driver
 	 * as we build off the pre-existing IFT_BRIDGE L2 hookpath in if_ethersubr.c
 	 */
@@ -796,8 +794,7 @@ veb_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			    "Inappropriate ioctl for command "
 			    "(expected SIOCSDRVSPEC)");
 			break;
-		}
-		else if (cmd == SIOCSDRVSPEC &&
+		} else if (cmd == SIOCSDRVSPEC &&
 		    (vc->vc_flags & VC_F_COPYOUT) != 0) {
 			error = EXTERROR(EINVAL,
 			    "Inappropriate ioctl for command "
@@ -994,7 +991,7 @@ veb_lookup_member_if(struct veb_softc *sc, struct ifnet *member_ifp)
 {
 	VEB_LOCK_OR_NET_EPOCH_ASSERT(sc);
 
-	return veb_port_of(member_ifp);
+	return (veb_port_of(member_ifp));
 }
 
 static void
@@ -1464,7 +1461,8 @@ veb_rtupdate(struct veb_softc *sc, const uint8_t *dst,
 	if ((vrt = veb_rtnode_lookup(sc, dst, vlan)) == NULL) {
 		VEB_RT_LOCK(sc);
 
-		/* Check again, now that we have the lock. There could have
+		/* 
+		 * Check again, now that we have the lock. There could have
 		 * been a race and we only want to insert this once. */
 		if (veb_rtnode_lookup(sc, dst, vlan) != NULL) {
 			VEB_RT_UNLOCK(sc);
@@ -1607,7 +1605,8 @@ veb_lookup_member(struct veb_softc *sc, const char *name)
 }
 
 static struct mbuf *
-veb_input(struct ifnet *ifp, struct mbuf *m) {
+veb_input(struct ifnet *ifp, struct mbuf *m)
+{
 	struct veb_softc *sc = NULL;
 	struct veb_port *vp;
 	struct ifnet *vpp;
@@ -2073,7 +2072,7 @@ veb_ioctl_add(struct veb_softc *sc, void *arg)
 	 * both hooks installed.
 	 *
 	 * vport's is deliberately excluded. It needs ordinary host semantics
-	 * (addressing, SIOCSIFFLAGS, lladdr changes) that veb_p_ioctl() denies
+	 * (addressing, lladdr changes) that veb_p_ioctl() denies
 	 * to members. One consequence: ifhwioctl()'s "no MTU changes on
 	 * bridge members" guard keys off if_bridge, so it does not cover the
 	 * vport and vport_ioctl() enforces that itself.
@@ -2308,9 +2307,8 @@ veb_linkstate(struct ifnet *ifp)
 	if (vp)
 		sc = vp->vp_sc;
 
-	if (sc != NULL) {
+	if (sc != NULL)
 		veb_linkcheck(sc);
-	}
 
 	NET_EPOCH_EXIT(et);
 }
