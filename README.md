@@ -95,4 +95,4 @@ Every document here lives in the docs/ directory.
 - [contributing.md](docs/contributing.md) - how to contribute
 
 ## License
-BSD-2-Clause. Copyright 2026 Aaron Espinoza [acesp25@FreeBSD.org](mailto:acesp25@FreeBSD.org).
+Derived from if_bridge(4). See individual file headers for license terms.
