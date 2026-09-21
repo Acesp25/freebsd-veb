@@ -1702,6 +1702,7 @@ veb_input(struct ifnet *ifp, struct mbuf *m) {
 static int
 veb_output(struct ifnet *ifp, struct mbuf *m, struct sockaddr *sa, struct rtentry *rt) 
 {
+	m_freem(m);
 	return (EXTERROR(EINVAL, "Veb has no output path"));
 }
 
