@@ -1,8 +1,8 @@
 #!/usr/libexec/atf-sh
 #
-# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2026 Aaron Espinoza <acesp25@FreeBSD.org>
 #
-# Copyright 2026 Aaron Espinoza <acesp25@FreeBSD.org>
+# SPDX-License-Identifier: BSD-2-Clause
 #
 # ATF/Kyua tests for if_veb(4).
 #

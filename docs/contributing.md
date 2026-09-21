@@ -22,4 +22,4 @@ One logical change per commit, in FreeBSD's format: a short subject prefixed wit
 If the change alters a documented decision, cite the ID (`D3`, `D7`, ...) and update `design.md` in the same commit.
 
 ## License
-By contributing you agree that your work is licensed under BSD-3-Clause, matching the rest of the repository.
+By contributing you agree that your work is licensed under BSD-2-Clause, matching the rest of the repository.
